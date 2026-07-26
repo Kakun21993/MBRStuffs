@@ -1,0 +1,5 @@
+the default name is data.vad
+the picture should be 320x200
+delete first 8 bytes signature in .vad file using HxD editor to make it render correctly
+
+Thanks to Sleep MOD
