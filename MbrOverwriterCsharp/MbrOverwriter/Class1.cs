@@ -118,9 +118,6 @@ namespace MbrOverwriter
             }
             finally
             {
-
-                Class2.Spawn(2000);
-                Class2.Spawn(150);
                 Thread.Sleep(12000);
                 Boolean t1;
                 uint t2;
